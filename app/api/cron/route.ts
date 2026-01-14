@@ -175,7 +175,8 @@ export async function GET(request: Request) {
         return { en: id.replace(/_/g, ' '), es: MANUAL_TRANSLATIONS[id] || id.replace(/_/g, ' ') };
       };
 
-      let recyclesInto = null;
+
+      let recyclesInto: any = null; 
       if (data.recyclesInto) {
         recyclesInto = {};
         Object.entries(data.recyclesInto).forEach(([matId, qty]) => {
@@ -184,7 +185,7 @@ export async function GET(request: Request) {
         });
       }
 
-      let recipeIngredients = null;
+      let recipeIngredients: any = null;
       if (data.recipe) {
         recipeIngredients = {};
         Object.entries(data.recipe).forEach(([matId, qty]) => {
@@ -193,7 +194,7 @@ export async function GET(request: Request) {
         });
       }
 
-      let requirements = null;
+      let requirements: any = null;
       if (type === 'hideout' && data.levels) {
         requirements = JSON.parse(JSON.stringify(data.levels));
         const levelsIterable = Array.isArray(requirements) ? requirements : Object.values(requirements);
@@ -212,6 +213,8 @@ export async function GET(request: Request) {
           requirements[matId] = { qty, name_en: matNames.en, name_es: matNames.es };
         });
       }
+
+      // ...
 
       return {
         game_id: data.id,
