@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚀 Arc Tracker
 
-## Getting Started
+<div align="center">
 
-First, run the development server:
+**The Essential Database for ARC Raiders™ / La Base de Datos Esencial para Raiders**
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+[Report Bug](https://github.com/mariagonzalezluna/arc-raiders-tracker/issues) · [Request Feature](https://github.com/mariagonzalezluna/arc-raiders-tracker/issues)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+</div>
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🇺🇸 English
 
-## Learn More
+**Arc Tracker** is a community-driven web application designed to help players of *ARC Raiders* track items, understand crafting recipes, and plan their hideout upgrades. It features real-time search, reverse crafting lookups, and automatic data synchronization.
 
-To learn more about Next.js, take a look at the following resources:
+### ✨ Key Features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+* **⚡ Smart Search:** Instantly filter by Weapons, Recyclables, Hideout Modules, Consumables, and Blueprints.
+* **🔗 Deep Linking:** Click on any material (e.g., *Metal Parts*) to see exactly where to find it or what it crafts.
+* **🏠 Hideout Planner:** Detailed multi-level upgrade requirements for every station (Medical Lab, Weapon Bench, Stash, etc.), including slot rewards and costs.
+* **🔄 Auto-Sync:** Powered by a Cron Job that automatically fetches and translates data from the community repository (RaidTheory), ensuring stats are always up-to-date.
+* **🌍 Bilingual:** Full support for English and Spanish (ES/EN).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 🛠️ Tech Stack
 
-## Deploy on Vercel
+* **Framework:** [Next.js 14](https://nextjs.org/) (App Router)
+* **Language:** TypeScript
+* **Styling:** Tailwind CSS + Masonry Layout
+* **Database:** Supabase (PostgreSQL)
+* **Deployment:** Vercel (with Cron Jobs for automation)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 🚀 Getting Started
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1.  **Clone the repo:**
+    ```bash
+    git clone [https://github.com/mariagonzalezluna/arc-raiders-tracker.git](https://github.com/mariagonzalezluna/arc-raiders-tracker.git)
+    cd arc-raiders-tracker
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Environment Variables:**
+    Create a `.env.local` file with your Supabase credentials:
+    ```env
+    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+    SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+    CRON_SECRET=your_custom_secret
+    ```
+
+4.  **Run locally:**
+    ```bash
+    npm run dev
+    ```
+
+---
+
+## 🇪🇸 Español
+
+**Arc Tracker** es una herramienta comunitaria diseñada para ayudar a los jugadores de *ARC Raiders* a gestionar objetos, entender las recetas de crafteo y planificar las mejoras de su guarida. Cuenta con búsqueda en tiempo real, relaciones de materiales y sincronización automática de datos.
+
+### ✨ Características Principales
+
+* **⚡ Búsqueda Inteligente:** Filtra instantáneamente por Armas, Reciclables, Módulos de Guarida, Consumibles y Planos.
+* **🔗 Navegación Relacional:** Haz clic en cualquier material (ej: *Piezas de Metal*) para ver de dónde sale o para qué sirve.
+* **🏠 Planificador de Guarida:** Requisitos detallados nivel por nivel para cada estación (Laboratorio Médico, Banco de Armas, Alijo, etc.), incluyendo recompensas de slots y costos.
+* **🔄 Sincronización Automática:** Sistema Cron que descarga, traduce y actualiza automáticamente los datos desde el repositorio de la comunidad, manteniendo los precios siempre al día.
+* **🌍 Bilingüe:** Soporte completo para Español e Inglés (ES/EN).
+
+### 🛠️ Tecnologías
+
+* **Framework:** [Next.js 14](https://nextjs.org/) (App Router)
+* **Lenguaje:** TypeScript
+* **Estilos:** Tailwind CSS + Diseño Masonry
+* **Base de Datos:** Supabase (PostgreSQL)
+* **Despliegue:** Vercel (con Cron Jobs para automatización)
+
+### ⚖️ Disclaimer
+
+*Arc Tracker is a fan-made community tool. Not affiliated with, endorsed by, or sponsored by Embark Studios. ARC Raiders™ and related logos are the exclusive property of Embark Studios AB.*
