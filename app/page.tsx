@@ -110,7 +110,7 @@ export default function Home() {
         case 'Weapon': query = query.in('category', ['Assault Rifle', 'Battle Rifle', 'Hand Cannon', 'Marksman Rifle', 'Pistol', 'Shotgun', 'Sniper Rifle', 'Submachine Gun', 'Launcher', 'Melee', 'Weapon']); break;
         case 'WeaponMod': query = query.or('category.ilike.%Mod%,category.ilike.%Attachment%,category.ilike.%Magazine%,category.ilike.%Muzzle%'); break;
         case 'Material': query = query.or('category.ilike.%Material%,category.ilike.%Recyclable%'); break;
-        case 'QuickUse': query = query.or('category', '%Quick Use%'); break;
+        case 'QuickUse': query = query.or('category.ilike.%Consumable%,category.ilike.%Medical%,category.ilike.%Grenade%,category.ilike.%Quick Use%'); break;
         case 'Shield': query = query.ilike('category', '%Shield%'); break;
         case 'Augment': query = query.or('category.ilike.%Gadget%,category.ilike.%Skill%,category.ilike.%Augment%'); break;
         case 'Key': query = query.or('category.ilike.%Key%,category.ilike.%Access%'); break;
