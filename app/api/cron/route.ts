@@ -70,6 +70,7 @@ const MANUAL_IMAGES: Record<string, string> = {
 let usageMap: Record<string, string[]> = {};       
 let obtainedFromMap: Record<string, string[]> = {}; 
 let idToNamesMap: Record<string, { en: string, es: string }> = {};
+let idToImageMap: Record<string, string> = {};
 
 const registerUsage = (materialId: string, usedInName: string) => {
   if (!usageMap[materialId]) usageMap[materialId] = [];
@@ -131,6 +132,18 @@ export async function GET(request: Request) {
       idToNamesMap[data.id] = names;
       const currentName = names.es;
 
+      // --- 2. NUEVO BLOQUE: GUARDAR IMAGEN EN EL MAPA ---
+      let imageUrl = "https://placehold.co/200x200/1e293b/ffffff?text=No+Image";
+      if (MANUAL_IMAGES[data.id]) {
+        imageUrl = MANUAL_IMAGES[data.id]; 
+      } else {
+        const imgSource = data.imageFileName || data.imageFilename || data.imageUrl || data.icon || data.image;
+        if (imgSource && typeof imgSource === 'string') {
+          imageUrl = imgSource.startsWith('http') ? imgSource : `${GITHUB_RAW_BASE}${imgSource}`;
+        }
+      }
+      idToImageMap[data.id] = imageUrl;
+
       if (data.upgradeCost) Object.keys(data.upgradeCost).forEach(matId => registerUsage(matId, `Mejora de ${currentName}`));
       
       if (type === 'hideout' && data.levels) {
@@ -176,12 +189,12 @@ export async function GET(request: Request) {
       };
 
 
-      let recyclesInto: any = null; 
+      let recyclesInto: any = null;
       if (data.recyclesInto) {
         recyclesInto = {};
         Object.entries(data.recyclesInto).forEach(([matId, qty]) => {
           const matNames = getMatNames(matId);
-          recyclesInto[matId] = { qty, name_en: matNames.en, name_es: matNames.es };
+          recyclesInto[matId] = { qty, name_en: matNames.en, name_es: matNames.es, image_url: idToImageMap[matId] };
         });
       }
 
@@ -190,7 +203,7 @@ export async function GET(request: Request) {
         recipeIngredients = {};
         Object.entries(data.recipe).forEach(([matId, qty]) => {
           const matNames = getMatNames(matId);
-          recipeIngredients[matId] = { qty, name_en: matNames.en, name_es: matNames.es };
+          recipeIngredients[matId] = { qty, name_en: matNames.en, name_es: matNames.es, image_url: idToImageMap[matId] };
         });
       }
 
@@ -202,7 +215,7 @@ export async function GET(request: Request) {
           if (level.requirementItemIds) {
             level.requirementItemIds = level.requirementItemIds.map((req: any) => {
               const matNames = getMatNames(req.itemId);
-              return { ...req, name_en: matNames.en, name_es: matNames.es };
+              return { ...req, name_en: matNames.en, name_es: matNames.es, image_url: idToImageMap[req.itemId] };
             });
           }
         });
@@ -210,7 +223,7 @@ export async function GET(request: Request) {
         requirements = {};
         Object.entries(data.upgradeCost).forEach(([matId, qty]) => {
           const matNames = getMatNames(matId);
-          requirements[matId] = { qty, name_en: matNames.en, name_es: matNames.es };
+          requirements[matId] = { qty, name_en: matNames.en, name_es: matNames.es, image_url: idToImageMap[matId] };
         });
       }
 
