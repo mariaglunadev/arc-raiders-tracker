@@ -24,7 +24,7 @@ type Item = {
 
 // --- ICONOS ---
 const ICONS = {
-  Grid: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>,
+  Grid: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>,
   Augment: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
   Shield: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>,
   Weapon: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M3 17h4l1-3h3v-3h2v-2h6V6h-6V4H9L3 12v5zm2-4l4-5h3v3h-3l-2 2H5v-2z"/></svg>,
@@ -223,7 +223,7 @@ export default function Home() {
     return totalValue;
   };
 
-  // --- RECOMENDACIÓN CORREGIDA (Siempre muestra Reciclar si es posible) ---
+  // --- RECOMENDACIÓN CORREGIDA (V3.4 - Muestra Reciclar si es posible) ---
   const getSmartRecommendation = (item: Item) => {
     // 1. Si se usa para crafting/misiones -> GUARDAR (Prioridad Máxima)
     if (item.used_for && item.used_for.length > 0) return { action: lang === 'es' ? 'GUARDAR' : 'KEEP', color: 'bg-purple-600 text-purple-100 border-purple-500', icon: '🛡️' };
@@ -251,7 +251,7 @@ export default function Home() {
       
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4 max-w-7xl mx-auto w-full pt-4">
-        <div className="text-sm font-mono text-slate-500 font-bold">v3.3</div>
+        <div className="text-sm font-mono text-slate-500 font-bold">v3.4</div>
         <button onClick={() => setLang(lang === 'es' ? 'en' : 'es')} className="px-4 py-1.5 rounded-full border border-slate-700 hover:border-orange-500 bg-slate-900 transition-all text-sm font-bold text-slate-300 hover:text-white">
           {lang === 'es' ? '🇺🇸 EN' : '🇪🇸 ES'}
         </button>
@@ -342,17 +342,31 @@ export default function Home() {
 
               <div className="text-sm space-y-3 bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
                 
-                {/* --- MENSAJE DE ADVERTENCIA (PERDIDA DE DINERO) --- */}
+                {/* --- MENSAJE DE ADVERTENCIA + TABLA FINANCIERA (V3.4) --- */}
                 {showWarning && (
                    <div className="bg-orange-900/20 border border-orange-600/30 p-2.5 rounded mb-3">
                     <p className="text-orange-300 font-bold text-xs mb-1 flex items-center gap-1">
                         <span>⚠️</span> {lang === 'es' ? 'Atención:' : 'Warning:'}
                     </p>
-                    <p className="text-slate-300 text-xs leading-relaxed">
+                    <p className="text-slate-300 text-xs leading-relaxed mb-2">
                       {lang === 'es' 
-                        ? `Recicla solo si necesitas materiales. Al hacerlo pierdes un ${lossPercent}% ($${diff.toLocaleString()}) de valor comparado con venderlo.`
-                        : `Recycle only if you need materials. You lose ${lossPercent}% ($${diff.toLocaleString()}) value compared to selling it.`}
+                        ? `Recicla solo si necesitas materiales. Al hacerlo pierdes valor.`
+                        : `Recycle only if you need materials. You lose value doing so.`}
                     </p>
+                    
+                    {/* --- TABLA DE DESGLOSE FINANCIERO --- */}
+                    <div className="flex flex-col gap-1 text-xs font-mono bg-black/20 p-2 rounded">
+                        <div className="flex justify-between">
+                            <span className="text-slate-400">{lang === 'es' ? 'Valor sin reciclar:' : 'Sell Value:'}</span>
+                            <span className="text-emerald-400 font-bold">${item.sell_price.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between border-t border-white/10 pt-1">
+                            <span className="text-slate-400">{lang === 'es' ? 'Elementos reciclados:' : 'Recycled Value:'}</span>
+                            <span className="text-orange-400 font-bold">
+                                ${recycleValue.toLocaleString()} <span className="text-[10px] opacity-80">(-${diff.toLocaleString()} / -{lossPercent}%)</span>
+                            </span>
+                        </div>
+                    </div>
                   </div>
                 )}
 
