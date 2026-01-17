@@ -24,7 +24,7 @@ type Item = {
 
 // --- ICONOS ---
 const ICONS = {
-  Grid: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>,
+  Grid: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>,
   Augment: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
   Shield: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>,
   Weapon: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M3 17h4l1-3h3v-3h2v-2h6V6h-6V4H9L3 12v5zm2-4l4-5h3v3h-3l-2 2H5v-2z"/></svg>,
@@ -72,7 +72,10 @@ export default function Home() {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   
   const [globalRarityMap, setGlobalRarityMap] = useState<Record<string, string>>({});
-  const [globalPriceMap, setGlobalPriceMap] = useState<Record<string, number>>({}); 
+  const [globalPriceMap, setGlobalPriceMap] = useState<Record<string, number>>({});
+  
+  // --- NUEVO: Diccionario Maestro para buscar por CUALQUIER nombre ---
+  const [globalLookupMap, setGlobalLookupMap] = useState<Record<string, any>>({});
 
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -84,7 +87,7 @@ export default function Home() {
 
   useEffect(() => { 
     fetchData(1, null, ''); 
-    fetchGlobalData(); // TRAEMOS LOS PRECIOS GLOBALES
+    fetchGlobalData(); 
     fetchVotes();
 
     const savedVotes = localStorage.getItem('arc_my_votes');
@@ -103,19 +106,36 @@ export default function Home() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // --- TRAER DATOS GLOBALES PARA CÁLCULOS ---
+  // --- TRAER DATOS GLOBALES Y CREAR EL DICCIONARIO MAESTRO ---
   const fetchGlobalData = async () => {
-    const { data } = await supabase.from('items').select('game_id, name_en, rarity, sell_price');
+    const { data } = await supabase.from('items').select('game_id, name_en, name_es, rarity, sell_price, image_url');
     if (data) {
       const rMap: Record<string, string> = {};
       const pMap: Record<string, number> = {};
+      const lookupMap: Record<string, any> = {}; // Este es el diccionario mágico
+
       data.forEach((item: any) => {
-        if (item.game_id) rMap[item.game_id] = item.rarity;
-        if (item.name_en) rMap[item.name_en] = item.rarity;
-        if (item.game_id) pMap[item.game_id] = item.sell_price || 0;
+        // Llenamos mapas básicos
+        if (item.game_id) {
+            rMap[item.game_id] = item.rarity;
+            pMap[item.game_id] = item.sell_price || 0;
+            // Guardamos en el diccionario por ID
+            lookupMap[item.game_id.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
+        }
+        if (item.name_en) {
+            rMap[item.name_en] = item.rarity;
+            // Guardamos en el diccionario por nombre inglés
+            lookupMap[item.name_en.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
+        }
+        if (item.name_es) {
+            // Guardamos en el diccionario por nombre español (¡ESTO ES LO QUE FALTABA!)
+            lookupMap[item.name_es.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
+        }
       });
+      
       setGlobalRarityMap(rMap);
       setGlobalPriceMap(pMap);
+      setGlobalLookupMap(lookupMap);
     }
   };
 
@@ -223,17 +243,12 @@ export default function Home() {
     return totalValue;
   };
 
-  // --- RECOMENDACIÓN CORREGIDA (V3.4 - Muestra Reciclar si es posible) ---
+  // --- RECOMENDACIÓN ---
   const getSmartRecommendation = (item: Item) => {
-    // 1. Si se usa para crafting/misiones -> GUARDAR (Prioridad Máxima)
     if (item.used_for && item.used_for.length > 0) return { action: lang === 'es' ? 'GUARDAR' : 'KEEP', color: 'bg-purple-600 text-purple-100 border-purple-500', icon: '🛡️' };
-    
-    // 2. Si se puede reciclar -> RECICLAR (Siempre, aunque se pierda dinero)
     if (item.crafting_recipes && Object.keys(item.crafting_recipes).length > 0) {
         return { action: lang === 'es' ? 'RECICLAR' : 'RECYCLE', color: 'bg-blue-600 text-blue-100 border-blue-500', icon: '♻️' };
     }
-    
-    // 3. Default -> VENDER
     return { action: lang === 'es' ? 'VENDER' : 'SELL', color: 'bg-green-600 text-green-100 border-green-500', icon: '💰' };
   };
 
@@ -246,12 +261,57 @@ export default function Home() {
   const getStyleById = (id: string) => getStyle(globalRarityMap[id]);
   const isItemCommon = (id: string) => { const r = globalRarityMap[id]; return !r || r === 'Common'; };
 
+  // --- HELPER ROBUSTO: BUSCA IMAGEN POR CUALQUIER NOMBRE ---
+  const getVisualData = (rawName: string) => {
+    // 1. Limpiar el string (quitar "Reciclaje de", "Fabricación de", etc.)
+    const cleanedName = rawName.replace(/^(Fabricación de |Reciclaje de |Crafting |Recycling |Se compra a |Purchased from )/i, '').trim().toLowerCase();
+    
+    // 2. Buscar en el diccionario maestro (que tiene inglés, español e IDs)
+    const data = globalLookupMap[cleanedName];
+
+    // 3. Fallback: Si no encuentra, usar el nombre tal cual
+    if (!data) {
+        return { 
+            img: "https://placehold.co/100x100/1e293b/ffffff?text=?", 
+            name: cleanedName, // Muestra el nombre limpio al menos
+            style: RARITY_STYLES['Common'], 
+            isCommon: true 
+        };
+    }
+
+    // 4. Si encuentra, devolver datos bonitos
+    return {
+        img: data.img || "https://placehold.co/100x100/1e293b/ffffff?text=?",
+        name: lang === 'es' ? (data.name_es || data.name_en) : (data.name_en || data.name_es),
+        style: getStyle(data.rarity),
+        isCommon: (!data.rarity || data.rarity === 'Common')
+    };
+  };
+
+  // --- COMPONENTE DE BOTÓN VISUAL (GRID ITEM) ---
+  const VisualItemButton = ({ rawString, qty }: { rawString: string, qty?: number }) => {
+    const { img, name, style, isCommon } = getVisualData(rawString);
+    
+    // Capitalizar primera letra del nombre para que se vea bien
+    const displayName = name.charAt(0).toUpperCase() + name.slice(1);
+
+    return (
+      <button onClick={() => clickToSearch(name)} className={`border rounded p-2 flex flex-col items-center gap-1 transition-all text-center group/btn relative bg-slate-900 ${style.border} border-opacity-30 hover:border-opacity-100 hover:bg-slate-800`}>
+        <div className={`h-16 w-full flex items-center justify-center mb-1 rounded ${style.bg}`}>
+          <img src={img} className="max-h-full max-w-full object-contain drop-shadow-sm" alt={displayName}/>
+        </div>
+        <span className={`text-xs leading-tight ${isCommon ? 'text-slate-300' : style.text}`}>{displayName}</span>
+        {qty !== undefined && <span className="absolute top-1 right-1 bg-slate-950/90 text-slate-200 text-xs font-mono font-bold px-1.5 py-0.5 rounded-full border border-slate-700">x{qty}</span>}
+      </button>
+    );
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-white p-4 md:p-8 font-sans selection:bg-orange-500 selection:text-white flex flex-col relative">
       
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4 max-w-7xl mx-auto w-full pt-4">
-        <div className="text-sm font-mono text-slate-500 font-bold">v3.4</div>
+        <div className="text-sm font-mono text-slate-500 font-bold">v4.1</div>
         <button onClick={() => setLang(lang === 'es' ? 'en' : 'es')} className="px-4 py-1.5 rounded-full border border-slate-700 hover:border-orange-500 bg-slate-900 transition-all text-sm font-bold text-slate-300 hover:text-white">
           {lang === 'es' ? '🇺🇸 EN' : '🇪🇸 ES'}
         </button>
@@ -309,17 +369,11 @@ export default function Home() {
           const rarityStyle = getStyle(item.rarity);
           const isBlueprint = item.category?.toLowerCase().includes('blueprint') || item.category?.toLowerCase().includes('schematic') || item.name_en.toLowerCase().includes('blueprint');
 
-          // --- CÁLCULO DE PÉRDIDA/GANANCIA ---
           const recycleValue = calculateRecycleValue(item);
-          
-          // Calculamos la diferencia
-          const diff = item.sell_price - recycleValue; // Si positivo = pierdes al reciclar
+          const diff = item.sell_price - recycleValue;
           const lossPercent = item.sell_price > 0 ? Math.round((diff / item.sell_price) * 100) : 0;
           
-          // Condiciones para mostrar mensajes
           const isRecycleAction = (rec.action === 'RECICLAR' || rec.action === 'RECYCLE');
-          
-          // 1. Advertencia de PÉRDIDA (Lo normal): Si reciclas, pierdes dinero
           const showWarning = isRecycleAction && diff > 0;
 
           return (
@@ -335,56 +389,81 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Botón Principal */}
               <div className={`flex items-center justify-center gap-2 py-1.5 rounded-md text-sm font-bold border ${rec.color} shadow-sm z-10`}>
                  <span>{rec.icon}</span><span>{rec.action}</span>
               </div>
 
               <div className="text-sm space-y-3 bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
                 
-                {/* --- MENSAJE DE ADVERTENCIA + TABLA FINANCIERA (V3.4) --- */}
                 {showWarning && (
                    <div className="bg-orange-900/20 border border-orange-600/30 p-2.5 rounded mb-3">
-                    <p className="text-orange-300 font-bold text-xs mb-1 flex items-center gap-1">
-                        <span>⚠️</span> {lang === 'es' ? 'Atención:' : 'Warning:'}
-                    </p>
-                    <p className="text-slate-300 text-xs leading-relaxed mb-2">
-                      {lang === 'es' 
-                        ? `Recicla solo si necesitas materiales. Al hacerlo pierdes valor.`
-                        : `Recycle only if you need materials. You lose value doing so.`}
-                    </p>
-                    
-                    {/* --- TABLA DE DESGLOSE FINANCIERO --- */}
+                    <p className="text-orange-300 font-bold text-xs mb-1 flex items-center gap-1"><span>⚠️</span> {lang === 'es' ? 'Atención:' : 'Warning:'}</p>
+                    <p className="text-slate-300 text-xs leading-relaxed mb-2">{lang === 'es' ? `Recicla solo si necesitas materiales. Al hacerlo pierdes valor.` : `Recycle only if you need materials. You lose value doing so.`}</p>
                     <div className="flex flex-col gap-1 text-xs font-mono bg-black/20 p-2 rounded">
-                        <div className="flex justify-between">
-                            <span className="text-slate-400">{lang === 'es' ? 'Valor sin reciclar:' : 'Sell Value:'}</span>
-                            <span className="text-emerald-400 font-bold">${item.sell_price.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between border-t border-white/10 pt-1">
-                            <span className="text-slate-400">{lang === 'es' ? 'Elementos reciclados:' : 'Recycled Value:'}</span>
-                            <span className="text-orange-400 font-bold">
-                                ${recycleValue.toLocaleString()} <span className="text-[10px] opacity-80">(-${diff.toLocaleString()} / -{lossPercent}%)</span>
-                            </span>
-                        </div>
+                        <div className="flex justify-between"><span className="text-slate-400">{lang === 'es' ? 'Valor sin reciclar:' : 'Sell Value:'}</span><span className="text-emerald-400 font-bold">${item.sell_price.toLocaleString()}</span></div>
+                        <div className="flex justify-between border-t border-white/10 pt-1"><span className="text-slate-400">{lang === 'es' ? 'Elementos reciclados:' : 'Recycled Value:'}</span><span className="text-orange-400 font-bold">${recycleValue.toLocaleString()} <span className="text-[10px] opacity-80">(-${diff.toLocaleString()} / -{lossPercent}%)</span></span></div>
                     </div>
                   </div>
                 )}
 
-                {/* --- MENSAJE DE LANCE (Aumento Gratuito) --- */}
                 {(item.name_es === 'Aumento de equipamiento gratuito' || item.name_en === 'Free Gear Augment') && (
                   <div className="bg-yellow-900/20 border border-yellow-600/30 p-2.5 rounded mb-3">
                     <p className="text-yellow-400 font-bold text-xs mb-1 flex items-center gap-1"><span>💡</span> {lang === 'es' ? 'Consejo de Lance:' : 'Lance Tip:'}</p>
-                    <p className="text-slate-300 text-xs leading-relaxed">
-                      {lang === 'es' ? 'Ve donde LANCE (Comerciantes) y cámbialo por un: Combate Ver. 1, Saqueo Ver. 1 o Táctico Ver. 1. Puedes usarlos o venderlos por más dinero.' : 'Go to LANCE (Traders) and trade it for a: Combat Ver. 1, Scavenge Ver. 1, or Tactical Ver. 1. You can use them or sell them for more cash.'}
-                    </p>
+                    <p className="text-slate-300 text-xs leading-relaxed">{lang === 'es' ? 'Ve donde LANCE (Comerciantes) y cámbialo por un: Combate Ver. 1, Saqueo Ver. 1 o Táctico Ver. 1. Puedes usarlos o venderlos por más dinero.' : 'Go to LANCE (Traders) and trade it for a: Combat Ver. 1, Scavenge Ver. 1, or Tactical Ver. 1. You can use them or sell them for more cash.'}</p>
                   </div>
                 )}
 
-                {item.used_for && (<div><p className="text-slate-300 font-bold mb-1.5 border-b border-slate-800 pb-1 text-sm">{lang === 'es' ? '⚠️ Necesario para:' : '⚠️ Needed for:'}</p><ul className="flex flex-col gap-1">{item.used_for.map((use, i) => (<li key={i} className="text-slate-400 leading-tight pl-2 border-l-2 border-slate-700">{use}</li>))}</ul></div>)}
-                {item.obtained_from && (<div><p className="text-slate-300 font-bold mb-1.5 border-b border-slate-800 pb-1 text-sm">{lang === 'es' ? '📍 Se obtiene de:' : '📍 Obtained from:'}</p><ul className="flex flex-col gap-1">{item.obtained_from.map((origin, i) => (<li key={i} className="text-slate-400 leading-tight pl-2 border-l-2 border-slate-700">{origin}</li>))}</ul></div>)}
-                {item.crafting_requirements && (<div><p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 flex justify-between items-center text-sm"><span>{item.category === 'Hideout' ? (lang === 'es' ? '🔨 Mejoras del Taller:' : '🔨 Workshop Upgrades:') : (lang === 'es' ? '⬆️ Necesita para mejorar:' : '⬆️ Upgrade Cost:')}</span></p><div className="flex flex-col gap-3">{(() => { if (item.category === 'Hideout') { const levels = Array.isArray(item.crafting_requirements) ? item.crafting_requirements : Object.values(item.crafting_requirements); levels.sort((a:any, b:any) => a.level - b.level); return levels.map((lvl: any) => { const rawDesc = lvl.description; const desc = (typeof rawDesc === 'object' && rawDesc !== null) ? (lang === 'es' ? (rawDesc.es || rawDesc.en) : (rawDesc.en || rawDesc.es)) : rawDesc; const otherReqs = lvl.otherRequirements || []; return (<div key={lvl.level} className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 relative overflow-hidden"><div className="absolute right-0 top-0 text-[50px] font-black text-slate-800/20 leading-none -mt-3 -mr-2 select-none pointer-events-none">{lvl.level}</div><div className="relative z-10 flex flex-col gap-2"><div className="text-sm uppercase font-bold text-slate-400 border-b border-slate-800 pb-1 mb-1">{lang === 'es' ? `Nivel ${lvl.level}` : `Level ${lvl.level}`}</div>{desc && (<div className="flex justify-between items-start text-sm mb-1"><span className="text-slate-500 font-bold">{lang === 'es' ? 'Aumento:' : 'Increase:'}</span><span className="text-emerald-400 font-mono text-right ml-2">{desc}</span></div>)}{otherReqs.length > 0 && (<div className="flex justify-between items-start text-sm mb-2"><span className="text-slate-500 font-bold">{lang === 'es' ? 'Costo:' : 'Cost:'}</span><div className="text-right">{otherReqs.map((req: string, i: number) => (<div key={i} className="text-yellow-500 font-mono font-bold">{req}</div>))}</div></div>)}{lvl.requirementItemIds && lvl.requirementItemIds.length > 0 && (<div className="grid grid-cols-2 gap-2 mt-1">{lvl.requirementItemIds.map((req: any, i: number) => { const name = lang === 'es' ? (req.name_es || req.itemId) : (req.name_en || req.itemId); const imgUrl = req.image_url || "https://placehold.co/100x100/1e293b/ffffff?text=?"; const s = getStyleById(req.itemId); const isCommon = isItemCommon(req.itemId); return (<button key={i} onClick={() => clickToSearch(name)} className={`border rounded p-2 flex flex-col items-center gap-1 transition-all text-center group/btn relative bg-slate-900 ${s.border} border-opacity-30 hover:border-opacity-100 hover:bg-slate-800`}><div className={`h-14 w-full flex items-center justify-center mb-1 rounded ${s.bg}`}><img src={imgUrl} className="max-h-full max-w-full object-contain drop-shadow-sm" alt={name}/></div><span className={`text-xs leading-tight line-clamp-2 h-6 flex items-center justify-center ${isCommon ? 'text-slate-300' : s.text}`}>{name.replace(/_/g, ' ')}</span><span className="absolute top-1 right-1 bg-slate-950/90 text-slate-200 text-xs font-mono font-bold px-1.5 py-0.5 rounded-full border border-slate-700">x{req.quantity}</span></button>);})}</div>)}</div></div>)});} else { const reqList = Object.entries(item.crafting_requirements).map(([k, v]: any) => ({...v, name: v.name || k, qty: v.qty || v, itemId: k})); return (<div className="grid grid-cols-2 gap-2">{reqList.map((req: any, i: number) => { const name = lang === 'es' ? (req.name_es || req.itemId) : (req.name_en || req.itemId); const imgUrl = req.image_url || "https://placehold.co/100x100/1e293b/ffffff?text=?"; const s = getStyleById(req.itemId); const isCommon = isItemCommon(req.itemId); return (<button key={i} onClick={() => clickToSearch(name)} className={`border rounded p-2 flex flex-col items-center gap-1 transition-all text-center group/btn relative bg-slate-900 ${s.border} border-opacity-30 hover:border-opacity-100 hover:bg-slate-800`}><div className={`h-16 w-full flex items-center justify-center mb-1 rounded ${s.bg}`}><img src={imgUrl} className="max-h-full max-w-full object-contain drop-shadow-sm" alt={name}/></div><span className={`text-xs leading-tight ${isCommon ? 'text-slate-300' : s.text}`}>{name.replace(/_/g, ' ')}</span><span className="absolute top-1 right-1 bg-slate-950/90 text-slate-200 text-xs font-mono font-bold px-1.5 py-0.5 rounded-full border border-slate-700">x{req.quantity || req.qty}</span></button>)})}</div>);}})()}</div></div>)}
-                {item.recipe_ingredients && (<div><p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 text-sm">{lang === 'es' ? '🧪 Se fabrica con:' : '🧪 Crafted with:'}</p><div className="grid grid-cols-2 gap-2">{Object.entries(item.recipe_ingredients).map(([k, v]: any) => { const name = lang === 'es' ? (v.name_es || k) : (v.name_en || k); const imgUrl = v.image_url || "https://placehold.co/100x100/1e293b/ffffff?text=?"; const s = getStyleById(k); const isCommon = isItemCommon(k); return (<button key={k} onClick={() => clickToSearch(name)} className={`border rounded p-2 flex flex-col items-center gap-1 transition-all text-center group/btn relative bg-slate-900 ${s.border} border-opacity-30 hover:border-opacity-100 hover:bg-slate-800`}><div className={`h-16 w-full flex items-center justify-center mb-1 rounded ${s.bg}`}><img src={imgUrl} className="max-h-full max-w-full object-contain drop-shadow-sm" alt={name}/></div><span className={`text-xs leading-tight ${isCommon ? 'text-slate-300' : s.text}`}>{name.replace(/_/g, ' ')}</span><span className="absolute top-1 right-1 bg-slate-950/90 text-slate-200 text-xs font-mono font-bold px-1.5 py-0.5 rounded-full border border-slate-700">x{v.qty || v}</span></button>);})}</div></div>)}
-                {item.crafting_recipes && (<div><p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 text-sm">{lang === 'es' ? '♻️ Si lo recicla consigues:' : '♻️ If you recycle it, you get:'}</p><div className="grid grid-cols-2 gap-2">{Object.entries(item.crafting_recipes).map(([k, v]: any) => { const name = lang === 'es' ? (v.name_es || k) : (v.name_en || k); const imgUrl = v.image_url || "https://placehold.co/100x100/1e293b/ffffff?text=?"; const s = getStyleById(k); const isCommon = isItemCommon(k); return (<button key={k} onClick={() => clickToSearch(name)} className={`border rounded p-2 flex flex-col items-center gap-1 transition-all text-center group/btn relative bg-slate-900 ${s.border} border-opacity-30 hover:border-opacity-100 hover:bg-slate-800`}><div className={`h-16 w-full flex items-center justify-center mb-1 rounded ${s.bg}`}><img src={imgUrl} className="max-h-full max-w-full object-contain drop-shadow-sm" alt={name}/></div><span className={`text-xs leading-tight ${isCommon ? 'text-slate-300' : s.text}`}>{name.replace(/_/g, ' ')}</span><span className="absolute top-1 right-1 bg-slate-950/90 text-slate-200 text-xs font-mono font-bold px-1.5 py-0.5 rounded-full border border-slate-700">x{v.qty || v}</span></button>);})}</div></div>)}
+                {/* --- "NECESARIO PARA" (Texto Simple) --- */}
+                {item.used_for && item.used_for.length > 0 && (
+                  <div>
+                    <p className="text-slate-300 font-bold mb-1.5 border-b border-slate-800 pb-1 text-sm">{lang === 'es' ? '⚠️ Necesario para:' : '⚠️ Needed for:'}</p>
+                    <ul className="flex flex-col gap-1">
+                      {item.used_for.map((use, i) => (<li key={i} className="text-slate-400 leading-tight pl-2 border-l-2 border-slate-700">{use}</li>))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* --- "SE OBTIENE DE" (Ahora busca por nombre español, inglés o ID) --- */}
+                {item.obtained_from && item.obtained_from.length > 0 && (
+                  <div>
+                    <p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 text-sm">
+                      {lang === 'es' ? '📍 Se obtiene de:' : '📍 Obtained from:'}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {item.obtained_from.map((origin, i) => (
+                        <VisualItemButton key={i} rawString={origin} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {item.crafting_requirements && (<div><p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 flex justify-between items-center text-sm"><span>{item.category === 'Hideout' ? (lang === 'es' ? '🔨 Mejoras del Taller:' : '🔨 Workshop Upgrades:') : (lang === 'es' ? '⬆️ Necesita para mejorar:' : '⬆️ Upgrade Cost:')}</span></p><div className="flex flex-col gap-3">{(() => { if (item.category === 'Hideout') { const levels = Array.isArray(item.crafting_requirements) ? item.crafting_requirements : Object.values(item.crafting_requirements); levels.sort((a:any, b:any) => a.level - b.level); return levels.map((lvl: any) => { const rawDesc = lvl.description; const desc = (typeof rawDesc === 'object' && rawDesc !== null) ? (lang === 'es' ? (rawDesc.es || rawDesc.en) : (rawDesc.en || rawDesc.es)) : rawDesc; const otherReqs = lvl.otherRequirements || []; return (<div key={lvl.level} className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 relative overflow-hidden"><div className="absolute right-0 top-0 text-[50px] font-black text-slate-800/20 leading-none -mt-3 -mr-2 select-none pointer-events-none">{lvl.level}</div><div className="relative z-10 flex flex-col gap-2"><div className="text-sm uppercase font-bold text-slate-400 border-b border-slate-800 pb-1 mb-1">{lang === 'es' ? `Nivel ${lvl.level}` : `Level ${lvl.level}`}</div>{desc && (<div className="flex justify-between items-start text-sm mb-1"><span className="text-slate-500 font-bold">{lang === 'es' ? 'Aumento:' : 'Increase:'}</span><span className="text-emerald-400 font-mono text-right ml-2">{desc}</span></div>)}{otherReqs.length > 0 && (<div className="flex justify-between items-start text-sm mb-2"><span className="text-slate-500 font-bold">{lang === 'es' ? 'Costo:' : 'Cost:'}</span><div className="text-right">{otherReqs.map((req: string, i: number) => (<div key={i} className="text-yellow-500 font-mono font-bold">{req}</div>))}</div></div>)}{lvl.requirementItemIds && lvl.requirementItemIds.length > 0 && (<div className="grid grid-cols-2 gap-2 mt-1">{lvl.requirementItemIds.map((req: any, i: number) => (<VisualItemButton key={i} rawString={req.itemId} qty={req.quantity} />))}</div>)}</div></div>)});} else { const reqList = Object.entries(item.crafting_requirements).map(([k, v]: any) => ({...v, name: v.name || k, qty: v.qty || v, itemId: k})); return (<div className="grid grid-cols-2 gap-2">{reqList.map((req: any, i: number) => (<VisualItemButton key={i} rawString={req.itemId} qty={req.quantity || req.qty} />))}</div>);}})()}</div></div>)}
+                
+                {item.recipe_ingredients && (
+                  <div>
+                    <p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 text-sm">
+                      {lang === 'es' ? '🧪 Se fabrica con:' : '🧪 Crafted with:'}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.entries(item.recipe_ingredients).map(([k, v]: any) => (
+                        <VisualItemButton key={k} rawString={k} qty={v.qty || v} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {item.crafting_recipes && (
+                  <div>
+                    <p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 text-sm">
+                      {lang === 'es' ? '♻️ Si lo recicla consigues:' : '♻️ If you recycle it, you get:'}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.entries(item.crafting_recipes).map(([k, v]: any) => (
+                        <VisualItemButton key={k} rawString={k} qty={v.qty || v} />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {isBlueprint && (
                   <div className="mt-4 pt-3 border-t border-slate-800">
