@@ -24,7 +24,7 @@ type Item = {
 
 // --- ICONOS ---
 const ICONS = {
-  Grid: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>,
+  Grid: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>,
   Augment: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
   Shield: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>,
   Weapon: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M3 17h4l1-3h3v-3h2v-2h6V6h-6V4H9L3 12v5zm2-4l4-5h3v3h-3l-2 2H5v-2z"/></svg>,
@@ -78,7 +78,7 @@ export default function Home() {
   const [globalPriceMap, setGlobalPriceMap] = useState<Record<string, number>>({});
   const [globalImageMap, setGlobalImageMap] = useState<Record<string, string>>({});
   const [globalNameMap, setGlobalNameMap] = useState<Record<string, { en: string, es: string }>>({});
-  const [globalLookupMap, setGlobalLookupMap] = useState<Record<string, any>>({}); // Diccionario maestro
+  const [globalLookupMap, setGlobalLookupMap] = useState<Record<string, any>>({}); 
 
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -89,13 +89,11 @@ export default function Home() {
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => { 
-    // --- LÓGICA DE DETECCIÓN DE IDIOMA ---
     if (typeof window !== 'undefined') {
         const browserLang = window.navigator.language;
         if (browserLang.startsWith('es')) {
             setLang('es');
         }
-        // Si no es español, se queda en 'en' (default)
     }
 
     fetchData(1, null, ''); 
@@ -134,17 +132,13 @@ export default function Home() {
             pMap[id] = item.sell_price || 0;
             iMap[id] = item.image_url;
             nMap[id] = { en: item.name_en, es: item.name_es };
-            
-            // Diccionario por ID
             if (item.game_id) lookupMap[item.game_id.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
         }
         if (item.name_en) {
             rMap[item.name_en] = item.rarity;
-            // Diccionario por nombre Inglés
             lookupMap[item.name_en.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
         }
         if (item.name_es) {
-            // Diccionario por nombre Español
             lookupMap[item.name_es.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
         }
       });
@@ -311,22 +305,20 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-white p-4 md:p-8 font-sans selection:bg-orange-500 selection:text-white flex flex-col relative">
       
-      {/* HEADER */}
-      <div className="flex justify-between items-center mb-4 max-w-7xl mx-auto w-full pt-4">
-        <div className="text-sm font-mono text-slate-500 font-bold">v4.2</div>
-        <button onClick={() => setLang(lang === 'es' ? 'en' : 'es')} className="px-4 py-1.5 rounded-full border border-slate-700 hover:border-orange-500 bg-slate-900 transition-all text-sm font-bold text-slate-300 hover:text-white">
-          {lang === 'es' ? '🇺🇸 EN' : '🇪🇸 ES'}
-        </button>
+      {/* HEADER SIMPLE */}
+      <div className="flex justify-center items-center mb-4 max-w-7xl mx-auto w-full pt-4">
+        <div className="text-sm font-mono text-slate-500 font-bold">v4.3</div>
       </div>
 
       <div className="max-w-3xl mx-auto mb-1 text-center w-full">
         <h1 className="text-5xl md:text-6xl font-black mb-1 text-transparent bg-clip-text bg-gradient-to-br from-orange-400 to-red-600 italic tracking-tighter">ARC TRACKER</h1>
       </div>
 
-      {/* STICKY SEARCH */}
+      {/* --- STICKY SEARCH + LANGUAGE (INTEGRADO) --- */}
       <div className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/50 py-4 mb-4 -mx-4 px-4 md:-mx-8 md:px-8 shadow-2xl transition-all">
-          <div className="max-w-7xl mx-auto flex flex-col gap-6 items-center">
-              <div className="relative group w-full max-w-2xl ">
+          <div className="max-w-7xl mx-auto flex gap-3 items-center justify-center">
+              {/* INPUT BÚSQUEDA */}
+              <div className="relative group w-full max-w-xl">
                   <input
                       type="text"
                       placeholder={lang === 'es' ? "Busca items (ej: Ferro...)" : "Search items..."}
@@ -335,6 +327,15 @@ export default function Home() {
                       onChange={(e) => handleSearch(e.target.value)}
                   />
               </div>
+              
+              {/* BOTÓN LENGUAJE INTEGRADO */}
+              <button 
+                onClick={() => setLang(lang === 'es' ? 'en' : 'es')} 
+                className="h-[60px] px-4 rounded-xl border border-slate-700 hover:border-orange-500 bg-slate-900 transition-all font-bold text-slate-300 hover:text-white flex flex-col justify-center items-center leading-tight shadow-lg"
+              >
+                <span className="text-lg">{lang === 'es' ? '🇪🇸' : '🇺🇸'}</span>
+                <span className="text-[10px] uppercase">{lang === 'es' ? 'ES' : 'EN'}</span>
+              </button>
           </div>
       </div>
 
