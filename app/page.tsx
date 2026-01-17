@@ -24,7 +24,7 @@ type Item = {
 
 // --- ICONOS ---
 const ICONS = {
-  Grid: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>,
+  Grid: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>,
   Augment: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
   Shield: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>,
   Weapon: <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M3 17h4l1-3h3v-3h2v-2h6V6h-6V4H9L3 12v5zm2-4l4-5h3v3h-3l-2 2H5v-2z"/></svg>,
@@ -68,14 +68,17 @@ export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [lang, setLang] = useState<'es' | 'en'>('es');
+  
+  // --- CAMBIO V4.2: Default 'en', pero se actualiza solo ---
+  const [lang, setLang] = useState<'es' | 'en'>('en');
+  
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   
   const [globalRarityMap, setGlobalRarityMap] = useState<Record<string, string>>({});
   const [globalPriceMap, setGlobalPriceMap] = useState<Record<string, number>>({});
-  
-  // --- NUEVO: Diccionario Maestro para buscar por CUALQUIER nombre ---
-  const [globalLookupMap, setGlobalLookupMap] = useState<Record<string, any>>({});
+  const [globalImageMap, setGlobalImageMap] = useState<Record<string, string>>({});
+  const [globalNameMap, setGlobalNameMap] = useState<Record<string, { en: string, es: string }>>({});
+  const [globalLookupMap, setGlobalLookupMap] = useState<Record<string, any>>({}); // Diccionario maestro
 
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -86,6 +89,15 @@ export default function Home() {
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => { 
+    // --- LÓGICA DE DETECCIÓN DE IDIOMA ---
+    if (typeof window !== 'undefined') {
+        const browserLang = window.navigator.language;
+        if (browserLang.startsWith('es')) {
+            setLang('es');
+        }
+        // Si no es español, se queda en 'en' (default)
+    }
+
     fetchData(1, null, ''); 
     fetchGlobalData(); 
     fetchVotes();
@@ -106,35 +118,40 @@ export default function Home() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // --- TRAER DATOS GLOBALES Y CREAR EL DICCIONARIO MAESTRO ---
   const fetchGlobalData = async () => {
     const { data } = await supabase.from('items').select('game_id, name_en, name_es, rarity, sell_price, image_url');
     if (data) {
       const rMap: Record<string, string> = {};
       const pMap: Record<string, number> = {};
-      const lookupMap: Record<string, any> = {}; // Este es el diccionario mágico
+      const iMap: Record<string, string> = {};
+      const nMap: Record<string, { en: string, es: string }> = {};
+      const lookupMap: Record<string, any> = {}; 
 
       data.forEach((item: any) => {
-        // Llenamos mapas básicos
-        if (item.game_id) {
-            rMap[item.game_id] = item.rarity;
-            pMap[item.game_id] = item.sell_price || 0;
-            // Guardamos en el diccionario por ID
-            lookupMap[item.game_id.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
+        const id = item.game_id || item.name_en; 
+        if (id) {
+            rMap[id] = item.rarity;
+            pMap[id] = item.sell_price || 0;
+            iMap[id] = item.image_url;
+            nMap[id] = { en: item.name_en, es: item.name_es };
+            
+            // Diccionario por ID
+            if (item.game_id) lookupMap[item.game_id.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
         }
         if (item.name_en) {
             rMap[item.name_en] = item.rarity;
-            // Guardamos en el diccionario por nombre inglés
+            // Diccionario por nombre Inglés
             lookupMap[item.name_en.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
         }
         if (item.name_es) {
-            // Guardamos en el diccionario por nombre español (¡ESTO ES LO QUE FALTABA!)
+            // Diccionario por nombre Español
             lookupMap[item.name_es.toLowerCase()] = { img: item.image_url, rarity: item.rarity, name_en: item.name_en, name_es: item.name_es };
         }
       });
-      
       setGlobalRarityMap(rMap);
       setGlobalPriceMap(pMap);
+      setGlobalImageMap(iMap);
+      setGlobalNameMap(nMap);
       setGlobalLookupMap(lookupMap);
     }
   };
@@ -230,10 +247,8 @@ export default function Home() {
     if (error) console.error("Error votando:", error);
   };
 
-  // --- CÁLCULO DE VALOR DE RECICLAJE ---
   const calculateRecycleValue = (item: Item) => {
     if (!item.crafting_recipes || Object.keys(item.crafting_recipes).length === 0) return 0;
-    
     let totalValue = 0;
     Object.entries(item.crafting_recipes).forEach(([matId, data]: [string, any]) => {
       const qty = typeof data === 'number' ? data : (data.qty || 1);
@@ -243,7 +258,6 @@ export default function Home() {
     return totalValue;
   };
 
-  // --- RECOMENDACIÓN ---
   const getSmartRecommendation = (item: Item) => {
     if (item.used_for && item.used_for.length > 0) return { action: lang === 'es' ? 'GUARDAR' : 'KEEP', color: 'bg-purple-600 text-purple-100 border-purple-500', icon: '🛡️' };
     if (item.crafting_recipes && Object.keys(item.crafting_recipes).length > 0) {
@@ -261,25 +275,17 @@ export default function Home() {
   const getStyleById = (id: string) => getStyle(globalRarityMap[id]);
   const isItemCommon = (id: string) => { const r = globalRarityMap[id]; return !r || r === 'Common'; };
 
-  // --- HELPER ROBUSTO: BUSCA IMAGEN POR CUALQUIER NOMBRE ---
   const getVisualData = (rawName: string) => {
-    // 1. Limpiar el string (quitar "Reciclaje de", "Fabricación de", etc.)
     const cleanedName = rawName.replace(/^(Fabricación de |Reciclaje de |Crafting |Recycling |Se compra a |Purchased from )/i, '').trim().toLowerCase();
-    
-    // 2. Buscar en el diccionario maestro (que tiene inglés, español e IDs)
     const data = globalLookupMap[cleanedName];
-
-    // 3. Fallback: Si no encuentra, usar el nombre tal cual
     if (!data) {
         return { 
             img: "https://placehold.co/100x100/1e293b/ffffff?text=?", 
-            name: cleanedName, // Muestra el nombre limpio al menos
+            name: cleanedName, 
             style: RARITY_STYLES['Common'], 
             isCommon: true 
         };
     }
-
-    // 4. Si encuentra, devolver datos bonitos
     return {
         img: data.img || "https://placehold.co/100x100/1e293b/ffffff?text=?",
         name: lang === 'es' ? (data.name_es || data.name_en) : (data.name_en || data.name_es),
@@ -288,13 +294,9 @@ export default function Home() {
     };
   };
 
-  // --- COMPONENTE DE BOTÓN VISUAL (GRID ITEM) ---
   const VisualItemButton = ({ rawString, qty }: { rawString: string, qty?: number }) => {
     const { img, name, style, isCommon } = getVisualData(rawString);
-    
-    // Capitalizar primera letra del nombre para que se vea bien
     const displayName = name.charAt(0).toUpperCase() + name.slice(1);
-
     return (
       <button onClick={() => clickToSearch(name)} className={`border rounded p-2 flex flex-col items-center gap-1 transition-all text-center group/btn relative bg-slate-900 ${style.border} border-opacity-30 hover:border-opacity-100 hover:bg-slate-800`}>
         <div className={`h-16 w-full flex items-center justify-center mb-1 rounded ${style.bg}`}>
@@ -311,7 +313,7 @@ export default function Home() {
       
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4 max-w-7xl mx-auto w-full pt-4">
-        <div className="text-sm font-mono text-slate-500 font-bold">v4.1</div>
+        <div className="text-sm font-mono text-slate-500 font-bold">v4.2</div>
         <button onClick={() => setLang(lang === 'es' ? 'en' : 'es')} className="px-4 py-1.5 rounded-full border border-slate-700 hover:border-orange-500 bg-slate-900 transition-all text-sm font-bold text-slate-300 hover:text-white">
           {lang === 'es' ? '🇺🇸 EN' : '🇪🇸 ES'}
         </button>
@@ -413,7 +415,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* --- "NECESARIO PARA" (Texto Simple) --- */}
                 {item.used_for && item.used_for.length > 0 && (
                   <div>
                     <p className="text-slate-300 font-bold mb-1.5 border-b border-slate-800 pb-1 text-sm">{lang === 'es' ? '⚠️ Necesario para:' : '⚠️ Needed for:'}</p>
@@ -423,7 +424,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* --- "SE OBTIENE DE" (Ahora busca por nombre español, inglés o ID) --- */}
                 {item.obtained_from && item.obtained_from.length > 0 && (
                   <div>
                     <p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 text-sm">
