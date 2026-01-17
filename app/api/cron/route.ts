@@ -6,7 +6,7 @@ const REPO_NAME = 'arcraiders-data';
 const GITHUB_API_BASE = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/`;
 const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/images/`;
 
-// --- DICCIONARIO DE TRADUCCIONES ---
+// --- DICCIONARIO DE TRADUCCIONES (CORREGIDO) ---
 const MANUAL_TRANSLATIONS: Record<string, string> = {
   "metal_parts": "Piezas de Metal",
   "durable_cloth": "Tela Resistente",
@@ -46,27 +46,24 @@ const MANUAL_TRANSLATIONS: Record<string, string> = {
   "explosives_station": "Estación de Explosivos",
   "utility_bench": "Estación de Utilidad",
   "refiner": "Refinería",
-  "gear_bench": "Banco de Equipo"
+  "gear_bench": "Banco de Equipo",
+  // CORRECCIÓN: Celda -> Célula
+  "power_cell": "Célula de Energía", 
+  "shock_cell": "Célula de Choque",
+  "fuel_cell": "Célula de Combustible"
 };
 
-// --- DICCIONARIO DE IMÁGENES LOCALES (Mapeado exacto a tus archivos) ---
 const MANUAL_IMAGES: Record<string, string> = {
-  // ID del JSON       ->  Tu Archivo en public/hideout
   "med_station":      "/hideout/Medical Lab.jpg",
-  "weapon_bench":         "/hideout/Gunsmith.jpg",
-  "equipment_bench":      "/hideout/Gear Bench.jpg",
-  "gear_bench":           "/hideout/Gear Bench.jpg", // Por si acaso aparece con este ID
-  "explosives_bench":   "/hideout/Explosives Station.jpg", // Ojo: en tu carpeta dice 'Explosives Station.jpg'
-  "scrappy":              "/hideout/Scrappy.jpg",
-  "refiner":              "/hideout/Refiner.jpg",
-  "utility_bench":        "/hideout/Utility Station.jpg",
-  
-  // Nota: No vi 'stash' en tu captura de carpeta. 
-  // Si añades una foto llamada 'Stash.jpg', descomenta la siguiente línea:
-  // "stash":                "/hideout/Stash.jpg",
+  "weapon_bench":     "/hideout/Gunsmith.jpg",
+  "equipment_bench":  "/hideout/Gear Bench.jpg",
+  "gear_bench":       "/hideout/Gear Bench.jpg",
+  "explosives_bench": "/hideout/Explosives Station.jpg",
+  "scrappy":          "/hideout/Scrappy.jpg",
+  "refiner":          "/hideout/Refiner.jpg",
+  "utility_bench":    "/hideout/Utility Station.jpg",
 };
 
-// Mapas globales
 let usageMap: Record<string, string[]> = {};       
 let obtainedFromMap: Record<string, string[]> = {}; 
 let idToNamesMap: Record<string, { en: string, es: string }> = {};
@@ -84,21 +81,28 @@ const registerOrigin = (materialId: string, originName: string) => {
 
 const extractNames = (data: any) => {
   const nameEn = data.name?.en || data.name?.['en-US'] || (typeof data.name === 'string' ? data.name : data.id);
+  // Aplicar corrección manual si existe, sino usar lo que venga
   const nameEs = MANUAL_TRANSLATIONS[data.id] || data.name?.es || nameEn;
-  return { en: nameEn, es: nameEs };
+  
+  // CORRECCIÓN FINAL: Si por alguna razón viene "Celda" en el JSON original y no está en el manual, forzamos el reemplazo
+  const finalNameEs = nameEs.replace(/Celda/g, "Célula").replace(/celda/g, "célula");
+  
+  return { en: nameEn, es: finalNameEs };
 }
+
+// Función auxiliar para quitar tildes
+const normalizeText = (text: string) => {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+};
 
 export async function GET(request: Request) {
   try {
-    // 1. Seguridad (Token Secreto O Robot de Vercel)
     const authHeader = request.headers.get('authorization');
-    const isVercelCron = request.headers.get('x-vercel-cron') === '1'; // Vercel envía esta firma automáticamente
+    const isVercelCron = request.headers.get('x-vercel-cron') === '1';
 
     if (process.env.NODE_ENV !== 'development' && authHeader !== `Bearer ${process.env.CRON_SECRET}` && !isVercelCron) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    console.log('🧠 Iniciando análisis con IMÁGENES LOCALES JPG...');
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -126,13 +130,11 @@ export async function GET(request: Request) {
     obtainedFromMap = {}; 
     idToNamesMap = {};
 
-    // --- PRIMERA PASADA ---
-    rawData.forEach(({ data, type }) => {
+    rawData.forEach(({ data }) => {
       const names = extractNames(data);
       idToNamesMap[data.id] = names;
       const currentName = names.es;
 
-      // --- 2. NUEVO BLOQUE: GUARDAR IMAGEN EN EL MAPA ---
       let imageUrl = "https://placehold.co/200x200/1e293b/ffffff?text=No+Image";
       if (MANUAL_IMAGES[data.id]) {
         imageUrl = MANUAL_IMAGES[data.id]; 
@@ -145,8 +147,7 @@ export async function GET(request: Request) {
       idToImageMap[data.id] = imageUrl;
 
       if (data.upgradeCost) Object.keys(data.upgradeCost).forEach(matId => registerUsage(matId, `Mejora de ${currentName}`));
-      
-      if (type === 'hideout' && data.levels) {
+      if (data.levels) {
         const levelsArray = Array.isArray(data.levels) ? data.levels : Object.values(data.levels);
         levelsArray.forEach((level: any) => {
           if (level.requirementItemIds) {
@@ -154,28 +155,20 @@ export async function GET(request: Request) {
           }
         });
       }
-
       if (data.recipe) Object.keys(data.recipe).forEach(ingId => registerUsage(ingId, `Fabricación de ${currentName}`));
-
-      if (data.recyclesInto) {
-        Object.keys(data.recyclesInto).forEach(yieldId => registerOrigin(yieldId, `Reciclaje de ${currentName}`));
-      }
+      if (data.recyclesInto) Object.keys(data.recyclesInto).forEach(yieldId => registerOrigin(yieldId, `Reciclaje de ${currentName}`));
     });
 
-    // --- SEGUNDA PASADA ---
     const rowsToUpsert = rawData.map(({ data, type }) => {
       const names = extractNames(data);
       let descEn = data.description?.en || (typeof data.description === 'string' ? data.description : "");
       let descEs = data.description?.es || descEn;
 
-      // --- LOGICA DE IMAGENES ---
-      let imageUrl = "https://placehold.co/200x200/1e293b/ffffff?text=No+Image";
+      // Reemplazo en descripciones también por si acaso
+      descEs = descEs.replace(/Celda/g, "Célula").replace(/celda/g, "célula");
 
-      // 1. Prioridad: Imagen MANUAL local (JPGs con espacios)
-      if (MANUAL_IMAGES[data.id]) {
-        imageUrl = MANUAL_IMAGES[data.id]; 
-      } 
-      // 2. Fallback: GitHub/CDN
+      let imageUrl = "https://placehold.co/200x200/1e293b/ffffff?text=No+Image";
+      if (MANUAL_IMAGES[data.id]) imageUrl = MANUAL_IMAGES[data.id]; 
       else {
         const imgSource = data.imageFileName || data.imageFilename || data.imageUrl || data.icon || data.image;
         if (imgSource && typeof imgSource === 'string') {
@@ -187,7 +180,6 @@ export async function GET(request: Request) {
         if (idToNamesMap[id]) return idToNamesMap[id];
         return { en: id.replace(/_/g, ' '), es: MANUAL_TRANSLATIONS[id] || id.replace(/_/g, ' ') };
       };
-
 
       let recyclesInto: any = null;
       if (data.recyclesInto) {
@@ -227,7 +219,8 @@ export async function GET(request: Request) {
         });
       }
 
-      // ...
+      // CAMPO CLAVE: Creamos un string de búsqueda normalizado
+      const searchText = normalizeText(`${names.en} ${names.es} ${data.type || ''}`);
 
       return {
         game_id: data.id,
@@ -246,6 +239,7 @@ export async function GET(request: Request) {
         crafting_requirements: requirements,   
         used_for: usageMap[data.id] || null,
         obtained_from: obtainedFromMap[data.id] || null,
+        search_text: searchText, // Guardamos el texto limpio para buscar sin tildes
         updated_at: new Date().toISOString()
       };
     });
@@ -253,7 +247,7 @@ export async function GET(request: Request) {
     const { error } = await supabase.from('items').upsert(rowsToUpsert, { onConflict: 'game_id' });
     if (error) throw error;
 
-    return NextResponse.json({ success: true, count: rowsToUpsert.length, message: 'Datos actualizados con Imágenes Locales JPG.' });
+    return NextResponse.json({ success: true, count: rowsToUpsert.length, message: 'Datos actualizados. Células y Búsqueda listos.' });
 
   } catch (error: any) {
     console.error('💀 Error:', error.message);

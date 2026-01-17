@@ -75,11 +75,24 @@ export default function Home() {
   const [totalItems, setTotalItems] = useState(0);
   const ITEMS_PER_PAGE = 24; 
 
-  const [localVotes, setLocalVotes] = useState<Record<string, string[]>>({});
+  // Estado de votos (Ahora contendrá los votos reales de la DB)
+  const [communityVotes, setCommunityVotes] = useState<Record<string, Record<string, number>>>({});
+  // Estado local para saber si YO ya voté (para no votar 2 veces en la misma sesión)
+  const [myVotes, setMyVotes] = useState<Record<string, boolean>>({});
+  // Estado para el botón de Scroll
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => { 
     fetchData(1, null, ''); 
     fetchRarityMap();
+    fetchVotes(); // Cargar votos al inicio
+
+    // Listener para el botón Scroll to Top
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const fetchRarityMap = async () => {
@@ -94,6 +107,19 @@ export default function Home() {
     }
   };
 
+  // Cargar votos de la base de datos
+  const fetchVotes = async () => {
+    const { data } = await supabase.from('map_votes').select('item_id, map_id, votes');
+    if (data) {
+      const votesMap: Record<string, Record<string, number>> = {};
+      data.forEach((row: any) => {
+        if (!votesMap[row.item_id]) votesMap[row.item_id] = {};
+        votesMap[row.item_id][row.map_id] = row.votes;
+      });
+      setCommunityVotes(votesMap);
+    }
+  };
+
   const fetchData = async (pageNumber: number, filter: string | null, searchTerm: string) => {
     setLoading(true);
     const from = (pageNumber - 1) * ITEMS_PER_PAGE;
@@ -102,7 +128,13 @@ export default function Home() {
     let query = supabase.from('items').select('*', { count: 'exact' });
 
     if (searchTerm) {
-      query = query.or(`name_en.ilike.%${searchTerm}%,name_es.ilike.%${searchTerm}%`);
+      // 1. Normalizar término de búsqueda (quitar tildes y minúsculas)
+      const cleanTerm = searchTerm.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      
+      // 2. Intentar buscar en la columna 'search_text' si existe (creada en route.ts)
+      // Si no existe esa columna en DB todavía, fallback al ILIKE normal
+      // Usamos 'or' para cubrir ambos casos por seguridad
+      query = query.or(`search_text.ilike.%${cleanTerm}%,name_en.ilike.%${searchTerm}%,name_es.ilike.%${searchTerm}%`);
     }
 
     if (filter) {
@@ -151,16 +183,30 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleVote = (itemId: string, mapId: string) => {
-    setLocalVotes(prev => {
-        const currentVotes = prev[itemId] || [];
-        const hasVoted = currentVotes.includes(mapId);
-        
-        if (hasVoted) {
-            return { ...prev, [itemId]: currentVotes.filter(m => m !== mapId) };
-        }
-        return { ...prev, [itemId]: [...currentVotes, mapId] };
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // --- LÓGICA DE VOTACIÓN REAL (CON RPC) ---
+  const handleVote = async (itemId: string, mapId: string) => {
+    // Verificar si ya votó localmente para evitar spam en la misma sesión
+    const voteKey = `${itemId}-${mapId}`;
+    if (myVotes[voteKey]) return; 
+
+    // Actualización optimista (UI)
+    setCommunityVotes(prev => {
+        const itemVotes = prev[itemId] || {};
+        return { 
+            ...prev, 
+            [itemId]: { ...itemVotes, [mapId]: (itemVotes[mapId] || 0) + 1 }
+        };
     });
+    setMyVotes(prev => ({ ...prev, [voteKey]: true }));
+
+    // Llamada a Supabase (Función RPC creada en Paso 1)
+    const { error } = await supabase.rpc('increment_vote', { row_item_id: itemId, row_map_id: mapId });
+    
+    if (error) console.error("Error votando:", error);
   };
 
   const getSmartRecommendation = (item: Item) => {
@@ -183,7 +229,7 @@ export default function Home() {
       
       {/* HEADER TÍTULO Y LENGUAJE */}
       <div className="flex justify-between items-center mb-4 max-w-7xl mx-auto w-full pt-4">
-        <div className="text-sm font-mono text-slate-500 font-bold">v1.1</div>
+        <div className="text-sm font-mono text-slate-500 font-bold">v2</div>
         <button onClick={() => setLang(lang === 'es' ? 'en' : 'es')} className="px-4 py-1.5 rounded-full border border-slate-700 hover:border-orange-500 bg-slate-900 transition-all text-sm font-bold text-slate-300 hover:text-white">
           {lang === 'es' ? '🇺🇸 EN' : '🇪🇸 ES'}
         </button>
@@ -193,14 +239,10 @@ export default function Home() {
         <h1 className="text-5xl md:text-6xl font-black mb-1 text-transparent bg-clip-text bg-gradient-to-br from-orange-400 to-red-600 italic tracking-tighter">ARC TRACKER</h1>
       </div>
 
-      {/* --- CONTENEDOR STICKY (BUSCADOR + FILTROS) --- */}
-      {/* CORREGIDO: z-50 alto, backdrop-blur y border-b para separar visualmente */}
-      <div className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/50 py-4 mb-8 -mx-4 px-4 md:-mx-8 md:px-8 shadow-2xl transition-all">
-          
-          {/* AUMENTADO: max-w-7xl para permitir que los filtros se expandan en una sola línea si hay espacio */}
+      {/* --- BLOQUE 1: BUSCADOR (STICKY) --- */}
+      {/* Aquí está el cambio: Solo este div tiene 'sticky' y z-50 */}
+      <div className="sticky top-0 z-50 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/50 py-4 mb-4 -mx-4 px-4 md:-mx-8 md:px-8 shadow-2xl transition-all">
           <div className="max-w-7xl mx-auto flex flex-col gap-6 items-center">
-              
-              {/* BUSCADOR */}
               <div className="relative group w-full max-w-2xl ">
                   <input
                       type="text"
@@ -210,12 +252,14 @@ export default function Home() {
                       onChange={(e) => handleSearch(e.target.value)}
                   />
               </div>
+          </div>
+      </div>
 
-              {/* FILTROS */}
-              {/* CORREGIDO: flex-wrap para que bajen solo si no caben, y justify-center para que se vean centrados */}
+      {/* --- BLOQUE 2: FILTROS (NORMAL) --- */}
+      {/* Este div ya no es sticky, y he añadido un margen inferior para separarlo */}
+      <div className="w-full mb-8">
+          <div className="max-w-7xl mx-auto flex flex-col items-center">
               <div className="flex flex-wrap justify-center gap-4 w-full">
-                  
-                  {/* Botón de "TODO" */}
                   <div className="relative group flex flex-col items-center">
                       <button
                       onClick={() => handleCategoryFilter(null)}
@@ -228,7 +272,6 @@ export default function Home() {
                       </span>
                   </div>
 
-                  {/* Resto de Categorías */}
                   {CATEGORIES.map((cat) => (
                       <div key={cat.id} className="relative group flex flex-col items-center">
                           <button
@@ -245,7 +288,6 @@ export default function Home() {
               </div>
           </div>
       </div>
-      {/* --- FIN CONTENEDOR STICKY --- */}
 
       {loading && (
         <div className="text-center py-20">
@@ -284,7 +326,6 @@ export default function Home() {
 
               <div className="text-sm space-y-3 bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
                 
-                {/* 1. NECESARIO PARA */}
                 {item.used_for && (
                   <div>
                     <p className="text-slate-300 font-bold mb-1.5 border-b border-slate-800 pb-1 text-sm">
@@ -300,7 +341,6 @@ export default function Home() {
                   </div>
                 )}
                 
-                {/* 2. SE OBTIENE DE */}
                 {item.obtained_from && (
                   <div>
                     <p className="text-slate-300 font-bold mb-1.5 border-b border-slate-800 pb-1 text-sm">
@@ -316,7 +356,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 3. REQUISITOS TALLER / MEJORAS */}
                 {item.crafting_requirements && (
                   <div>
                     <p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 flex justify-between items-center text-sm">
@@ -394,7 +433,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 4. SE FABRICA CON */}
                 {item.recipe_ingredients && (
                   <div>
                     <p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 text-sm">
@@ -420,7 +458,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 5. RECICLAJE */}
                 {item.crafting_recipes && (
                   <div>
                     <p className="text-slate-300 font-bold mb-2 border-b border-slate-800 pb-1 text-sm">
@@ -446,7 +483,7 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* 6. ¿DÓNDE LO ENCONTRASTE? (SOLO PLANOS) */}
+                {/* 6. ¿DÓNDE LO ENCONTRASTE? (CON PERSISTENCIA REAL) */}
                 {isBlueprint && (
                   <div className="mt-4 pt-3 border-t border-slate-800">
                     <p className="text-slate-300 font-bold mb-2 text-sm flex items-center gap-2">
@@ -454,11 +491,11 @@ export default function Home() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {GAME_MAPS.map((map) => {
-                        const allItemVotes = localVotes[item.id] || [];
-                        const count = allItemVotes.filter(m => m === map.id).length;
-                        const hasVoted = allItemVotes.includes(map.id);
+                        const count = communityVotes[item.id]?.[map.id] || 0;
+                        const hasVoted = myVotes[`${item.id}-${map.id}`];
                         
-                        const maxVotes = Math.max(...GAME_MAPS.map(m => allItemVotes.filter(v => v === m.id).length));
+                        const allVotes = Object.values(communityVotes[item.id] || {});
+                        const maxVotes = allVotes.length > 0 ? Math.max(...allVotes) : 0;
                         const isWinner = count > 0 && count === maxVotes;
 
                         return (
@@ -492,6 +529,17 @@ export default function Home() {
       </div>
       )}
 
+      {/* --- BOTÓN TAP TO TOP --- */}
+      <button 
+        onClick={scrollToTop}
+        className={`fixed bottom-8 right-8 z-50 p-3 rounded-full bg-orange-600 text-white shadow-lg border border-orange-400 transition-all transform hover:scale-110 hover:bg-orange-500 ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}
+        aria-label="Scroll to top"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-6 h-6">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+        </svg>
+      </button>
+
       {/* --- CONTROLES DE PAGINACIÓN --- */}
       <div className="flex justify-center items-center gap-4 mb-10">
         <button 
@@ -515,8 +563,8 @@ export default function Home() {
         </button>
       </div>
 
-      {/* FOOTER */}
       <footer className="mt-auto border-t border-slate-800/50 pt-10 pb-12 bg-slate-950/50">
+        {/* ... Footer igual que antes ... */}
         <div className="max-w-4xl mx-auto text-center px-4">
           <div className="flex flex-wrap justify-center gap-4 md:gap-8 mb-8 text-base font-medium">
             <a href="https://github.com/mariaglunadev/arc-raiders-tracker/issues" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-slate-400 hover:text-orange-400 transition-colors">
